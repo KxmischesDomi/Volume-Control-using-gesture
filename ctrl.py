@@ -3,6 +3,9 @@ import time
 import numpy as np
 import HandTrackingModule as htm
 import math
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 from pynput.keyboard import Key,Controller
 keyboard = Controller()
@@ -31,6 +34,26 @@ angleBar = 400
 angleDeg = 0
 minHand  = 50 #50
 maxHand  = 300 #300
+
+maxVolume = -65.25
+minVolume = 0
+angleDivision = 180 / -maxVolume
+
+def set_master_volume(vol):
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+    vol = (vol * -1 + maxVolume)
+    print(vol)
+
+    if vol > minVolume or vol < maxVolume:
+        return
+
+    volume.SetMasterVolumeLevel(vol, None)
+
+
 while True:
     success, img = cap.read()
     img = detector.findHands(img)
@@ -52,33 +75,24 @@ while True:
  
         # Hand range 50 - 300
     
-        angle  = np.interp(length, [minHand, maxHand], [minAngle, maxAngle])
+        angle = np.interp(length, [minHand, maxHand], [minAngle, maxAngle])
         angleBar = np.interp(length, [minHand, maxHand], [400, 150])
         angleDeg = np.interp(length, [minHand, maxHand], [0, 180])   # degree angle 0 - 180
-       
 
-        if last_length:
-            if length>last_length:
-                keyboard.press(Key.media_volume_up)
-                keyboard.release(Key.media_volume_up)
-                print("VOL UP")
-            elif length<last_length:
-                keyboard.press(Key.media_volume_down)
-                keyboard.release(Key.media_volume_down)
-                print("VOL DOWN")
-        
+        set_master_volume(-angle / angleDivision)
+
         last_angle=angle
         last_length=length
 
         # print(int(length), angle)
- 
+
         if length < 50:
             cv2.circle(img, (cx, cy), 15, (0, 255, 0), cv2.FILLED)
- 
+
     cv2.rectangle(img, (50, 150), (85, 400), (255, 0, 0), 3)
     cv2.rectangle(img, (50, int(angleBar)), (85, 400), (255, 0, 0), cv2.FILLED)
     cv2.putText(img, f'{int(angleDeg)} deg', (40, 90), cv2.FONT_HERSHEY_COMPLEX,
                 2, (0, 9, 255), 3)
- 
+
     cv2.imshow("Img", img)
     cv2.waitKey(1)
